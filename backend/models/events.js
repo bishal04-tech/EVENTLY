@@ -47,6 +47,11 @@ const eventSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    user: {
+    type: mongoose.Schema.Types.ObjectId, // Stores MongoDB's unique document ID hash
+    ref: 'User',                           // Connects this field directly to your 'User' collection
+    required: [true, 'An event must belong to a registered creator']
+    }
   },
   {
     timestamps: true, // This automatically manages 'createdAt' and 'updatedAt' fields for you!

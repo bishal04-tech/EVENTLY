@@ -73,14 +73,17 @@ export const getEvents = async (req, res) => {
 
 // @desc    Create a new event
 // @route   POST /api/events
+// @access  Private
 export const createEvent = async (req, res) => {
   try {
     const { startDate, endDate, ...rest } = req.body;
 
+    // 🔒 SECURE BINDING: Automatically attach the logged-in user's ID to the event
     const event = await Event.create({
       ...rest,
       startDate: new Date(startDate),
       endDate: endDate ? new Date(endDate) : null,
+      user: req.user.id // 👈 Links the event directly to its creator
     });
 
     // Lookup category name for the newly created item
@@ -154,22 +157,32 @@ export const getEventById = async (req, res) => {
 
 // @desc    Update an event field properties path natively
 // @route   PATCH /api/events/:id
+// @access  Private
 export const updateEvent = async (req, res) => {
   try {
     const { startDate, endDate, ...rest } = req.body;
     
+    // 1. Fetch the event first to verify ownership before making any database updates
+    const existingEvent = await Event.findById(req.params.id);
+    if (!existingEvent) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    // 🔒 RESOURCE AUTHORIZATION CHECK: Ensure the logged-in user owns this event
+    if (!existingEvent.user || existingEvent.user.toString() !== req.user.id) {
+      return res.status(403).json({ error: "User not authorized to update this event" });
+    }
+
+    // 2. Proceed with the update if the validation check passes
     const updateData = { ...rest };
     if (startDate) updateData.startDate = new Date(startDate);
     if (endDate) updateData.endDate = new Date(endDate);
 
     const event = await Event.findByIdAndUpdate(
-  req.params.id,
-  { $set: updateData },
-  { returnDocument: 'after', runValidators: true } //  Clean, modern syntax
-   ).lean();
-    if (!event) {
-      return res.status(404).json({ error: "Event not found" });
-    }
+      req.params.id,
+      { $set: updateData },
+      { returnDocument: 'after', runValidators: true }
+    ).lean();
 
     const categoryDoc = await Category.findOne({ categoryId: event.categoryId }).lean();
     const orders = await Order.find({ eventId: event._id }).lean();
@@ -183,12 +196,22 @@ export const updateEvent = async (req, res) => {
 
 // @desc    Delete an event document file securely
 // @route   DELETE /api/events/:id
+// @access  Private
 export const deleteEvent = async (req, res) => {
   try {
-    const event = await Event.findByIdAndDelete(req.params.id);
-    if (!event) {
+    // 1. Fetch the event to evaluate who owns it
+    const existingEvent = await Event.findById(req.params.id);
+    if (!existingEvent) {
       return res.status(404).json({ error: "Event not found" });
     }
+
+    // 🔒 RESOURCE AUTHORIZATION CHECK: Ensure the logged-in user owns this event
+    if (!existingEvent.user || existingEvent.user.toString() !== req.user.id) {
+      return res.status(403).json({ error: "User not authorized to delete this event" });
+    }
+
+    // 2. Execute deletion if ownership is confirmed
+    await Event.findByIdAndDelete(req.params.id);
     res.sendStatus(204); 
   } catch (error) {
     res.status(400).json({ error: error.message });

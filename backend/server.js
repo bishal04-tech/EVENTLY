@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import mongoose from 'mongoose'; // 1. Imported Mongoose to handle the MongoDB connection
 import eventRoutes from './routes/eventRoutes.js'; // Importing the event routes
+import authRoutes from './routes/authRoutes.js';
+
 // Load environment variables
 dotenv.config();
 
@@ -22,7 +24,7 @@ mongoose.connect(process.env.MONGO_URI)
 app.use(cors());
 app.use(express.json()); // Allows the server to accept JSON data in requests
 
-
+app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
 
 
