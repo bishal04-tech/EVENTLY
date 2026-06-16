@@ -122,13 +122,29 @@ function Router() {
       <Route>
         <Layout>
           <Switch>
-            <Route path="/" component={HomePage} />
-            <Route path="/events" component={EventsPage} />
-            <Route path="/events/create" component={CreateEventPage} />
-            <Route path="/events/:id" component={EventDetailPage} />
-            <Route path="/events/:id/edit" component={EditEventPage} />
-            <Route path="/categories" component={CategoriesPage} />
-            <Route path="/metrics" component={metrics} />
+            
+            <Route path="/">
+              {() => <ProtectedRoute component={HomePage} />}
+            </Route>
+             <Route path="/events">
+              {() => <ProtectedRoute component={EventsPage} />}
+            </Route>
+             <Route path="/events/create">
+              {() => <ProtectedRoute component={CreateEventPage} />}
+            </Route>
+            <Route path="/events/:id">
+              {() => <ProtectedRoute component={EventDetailPage} />}
+            </Route>
+             <Route path="/events/:id/edit">
+              {() => <ProtectedRoute component={EditEventPage} />}
+            </Route>
+            
+            <Route path="/metrics">
+              {() => <ProtectedRoute component={metrics} />}
+            </Route>
+            <Route path="/categories">
+              {() => <ProtectedRoute component={CategoriesPage} />}
+            </Route>
 
             {/* Guarded Analytics/Order Routes */}
             <Route path="/dashboard">
