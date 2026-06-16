@@ -17,12 +17,22 @@ const Login = () => {
     setError('');
     setLoading(true);
 
+    // try {
+    //   const response = await fetch('http://localhost:5000/api/auth/login', {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify(formData),
+    //   });
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
+  // 1. Grab your dynamic Render URL in production, or fallback to localhost during local development
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
+  // 2. Use template literals to append the endpoint cleanly
+  const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(formData),
+  });
 
       const data = await response.json();
 
