@@ -29,6 +29,7 @@ mongoose.connect(process.env.MONGO_URI)
 // Middleware
 app.use(cors());
 app.use(express.json()); // Allows the server to accept JSON data in requests
+app.set('trust proxy', 1);
 app.use(injectRedis);
 app.use(metricsTracker);
 
