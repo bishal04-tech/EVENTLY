@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, Calendar, Ticket, LayoutDashboard, Search, ListPlus, Activity } from "lucide-react";
+import { Menu, X, Calendar, Ticket, LayoutDashboard, Search, ListPlus, Activity, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -16,14 +16,24 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Handler to clear auth session and kick user to login screen
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setMobileMenuOpen(false);
+    setLocation("/login");
+  };
+
   const navLinks = [
     { href: "/", label: "Discover", icon: Search },
     { href: "/events", label: "Events", icon: Calendar },
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/orders", label: "Orders", icon: Ticket },
     { href: "/categories", label: "Categories", icon: ListPlus },
-    { href: "/metrics", label: "Metrics", icon: Activity }, // Appended cleanly into the dynamic map loop
+    { href: "/metrics", label: "Metrics", icon: Activity },
   ];
+
+  // Simple token check to conditionally render the Logout button
+  const isAuthenticated = !!localStorage.getItem("token");
 
   return (
     <header
@@ -66,6 +76,19 @@ export function Navbar() {
               Create Event
             </Button>
           </Link>
+          
+          {/* Desktop Logout Button */}
+          {isAuthenticated && (
+            <Button 
+              variant="outline" 
+              className="font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20 gap-2"
+              onClick={handleLogout}
+              data-testid="button-logout"
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </Button>
+          )}
         </div>
 
         <button
@@ -99,12 +122,26 @@ export function Navbar() {
               </Link>
             );
           })}
-          <div className="pt-4 mt-2 border-t">
+          
+          <div className="pt-4 mt-2 border-t flex flex-col gap-2">
             <Link href="/events/create" onClick={() => setMobileMenuOpen(false)}>
               <Button className="w-full justify-center font-semibold" data-testid="button-mobile-create-event">
                 Create Event
               </Button>
             </Link>
+
+            {/* Mobile Logout Button */}
+            {isAuthenticated && (
+              <Button 
+                variant="outline" 
+                className="w-full justify-center font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20 gap-2"
+                onClick={handleLogout}
+                data-testid="button-mobile-logout"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </Button>
+            )}
           </div>
         </div>
       )}
