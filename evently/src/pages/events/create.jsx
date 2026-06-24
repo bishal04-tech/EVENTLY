@@ -1,3 +1,6 @@
+
+
+// import { useState, useEffect, useCallback } from "react";
 // import { useLocation, useParams } from "wouter";
 // import { zodResolver } from "@hookform/resolvers/zod";
 // import { useForm } from "react-hook-form";
@@ -11,61 +14,6 @@
 // import { Switch } from "@/components/ui/switch";
 // import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 // import { useToast } from "@/hooks/use-toast";
-// import { useEffect } from "react";
-
-// // Temporary frontend-only mock hooks
-// const useListCategories = () => ({
-//   data: [
-//     { id: 1, name: "Music" },
-//     { id: 2, name: "Sports" },
-//     { id: 3, name: "Technology" },
-//     { id: 4, name: "Education" }
-//   ]
-// });
-
-// const useGetEvent = (id) => ({
-//   data: id ? {
-//     id: id,
-//     title: "Sample Festival 2026",
-//     description: "An incredible experience setup live.",
-//     imageUrl: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819",
-//     location: "Metropolis Arena",
-//     startDate: new Date().toISOString(),
-//     endDate: "",
-//     price: "49.99",
-//     isFree: false,
-//     url: "",
-//     categoryId: 1,
-//     organizerName: "Acme Productions"
-//   } : undefined,
-//   isLoading: false
-// });
-
-// const useCreateEvent = () => ({
-//   isPending: false,
-//   mutate: (
-//     data,
-//     options
-//   ) => {
-//     console.log("Create Event Payload:", data);
-//     options?.onSuccess?.({
-//       id: Math.floor(Math.random() * 1000)
-//     });
-//   }
-// });
-
-// const useUpdateEvent = () => ({
-//   isPending: false,
-//   mutate: (
-//     payload,
-//     options
-//   ) => {
-//     console.log("Update Event Payload:", payload);
-//     options?.onSuccess?.({
-//       id: payload.id
-//     });
-//   }
-// });
 
 // const formSchema = z.object({
 //   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -84,17 +32,45 @@
 // export default function EventFormPage() {
 //   const { id } = useParams();
 //   const isEdit = !!id;
-//   const eventId = isEdit ? Number(id) : undefined;
+//   const eventId = isEdit ? id : undefined; // Backend uses MongoDB string ID
   
 //   const [, setLocation] = useLocation();
 //   const { toast } = useToast();
 
-//   const { data: categories } = useListCategories();
-//   const { data: event, isLoading: isLoadingEvent } = useGetEvent(eventId);
-  
-//   const createEvent = useCreateEvent();
-//   const updateEvent = useUpdateEvent();
-  
+//   const [categories, setCategories] = useState([]);
+//   const [eventData, setEventData] = useState(null);
+//   const [isLoadingEvent, setIsLoadingEvent] = useState(isEdit);
+//   const [isSubmitting, setIsSubmitting] = useState(false);
+
+//   const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+//   const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+
+//   // Fetch Categories
+//   useEffect(() => {
+//     fetch(`${cleanBaseUrl}/api/categories`)
+//       .then((res) => res.json())
+//       .then((data) => setCategories(data))
+//       .catch((err) => console.error("Failed to load categories:", err));
+//   }, [cleanBaseUrl]);
+
+//   // Fetch Event if Editing
+//   useEffect(() => {
+//     if (!isEdit) return;
+    
+//     setIsLoadingEvent(true);
+//     fetch(`${cleanBaseUrl}/api/events/${eventId}`)
+//       .then((res) => {
+//         if (!res.ok) throw new Error("Event not found");
+//         return res.json();
+//       })
+//       .then((data) => setEventData(data))
+//       .catch((err) => {
+//         toast({ title: "Error", description: err.message, variant: "destructive" });
+//         setLocation("/events");
+//       })
+//       .finally(() => setIsLoadingEvent(false));
+//   }, [isEdit, eventId, cleanBaseUrl, setLocation, toast]);
+
 //   const form = useForm({
 //     resolver: zodResolver(formSchema),
 //     defaultValues: {
@@ -107,33 +83,35 @@
 //       price: "",
 //       isFree: false,
 //       url: "",
-//       categoryId: undefined, // Fixed default initialization to pass Zod min(1) validation cleanly
+//       categoryId: undefined,
 //       organizerName: "",
 //     },
 //   });
 
 //   const isFree = form.watch("isFree");
 
-//   // Track event loaded status and reset safely
+//   // Populate form when event data loads
 //   useEffect(() => {
-//     if (isEdit && event) {
+//     if (isEdit && eventData) {
 //       form.reset({
-//         title: event.title || "",
-//         description: event.description || "",
-//         imageUrl: event.imageUrl || "",
-//         location: event.location || "",
-//         startDate: event.startDate ? new Date(event.startDate).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
-//         endDate: event.endDate ? new Date(event.endDate).toISOString().slice(0, 16) : "",
-//         price: event.price || "",
-//         isFree: !!event.isFree,
-//         url: event.url || "",
-//         categoryId: event.categoryId,
-//         organizerName: event.organizerName || "",
+//         title: eventData.title || "",
+//         description: eventData.description || "",
+//         imageUrl: eventData.imageUrl || "",
+//         location: eventData.location || "",
+//         startDate: eventData.startDate ? new Date(eventData.startDate).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
+//         endDate: eventData.endDate ? new Date(eventData.endDate).toISOString().slice(0, 16) : "",
+//         price: eventData.price || "",
+//         isFree: !!eventData.isFree,
+//         url: eventData.url || "",
+//         categoryId: eventData.categoryId,
+//         organizerName: eventData.organizerName || "",
 //       });
 //     }
-//   }, [isEdit, event, form]);
+//   }, [isEdit, eventData, form]);
 
-//   const onSubmit = (data) => {
+//   const onSubmit = async (data) => {
+//     setIsSubmitting(true);
+    
 //     const formattedData = {
 //       ...data,
 //       startDate: new Date(data.startDate).toISOString(),
@@ -141,34 +119,42 @@
 //       price: data.isFree ? undefined : data.price,
 //     };
 
-//     if (isEdit && eventId) {
-//       updateEvent.mutate(
-//         { id: eventId, data: formattedData },
-//         {
-//           onSuccess: (updatedEvent) => {
-//             toast({
-//               title: "Event updated successfully"
-//             });
-//             setLocation(`/events/${updatedEvent.id}`);
-//           },
-//           onError: () => toast({ variant: "destructive", title: "Failed to update event" })
-//         }
-//       );
-//     } else {
-//       createEvent.mutate(
-//         formattedData, 
-//         {
-//           onSuccess: (newEvent) => {
-//             toast({ title: "Event created successfully" });
-//             setLocation(`/events/${newEvent.id}`);
-//           },
-//           onError: () => toast({ variant: "destructive", title: "Failed to create event" })
-//         }
-//       );
+//     try {
+//       const endpoint = isEdit ? `${cleanBaseUrl}/api/events/${eventId}` : `${cleanBaseUrl}/api/events`;
+//       const method = isEdit ? "PATCH" : "POST";
+
+//       // ⚠️ UPDATE THIS LINE: Grab your auth token from wherever you store it
+//       const token = localStorage.getItem("token") || ""; 
+
+//       const response = await fetch(endpoint, {
+//         method,
+//         headers: {
+//           "Content-Type": "application/json",
+//           "Authorization": `Bearer ${token}` // Required by your backend req.user check
+//         },
+//         body: JSON.stringify(formattedData)
+//       });
+
+//       if (!response.ok) {
+//         const errorData = await response.json();
+//         throw new Error(errorData.error || "Failed to save event");
+//       }
+
+//       const savedEvent = await response.json();
+      
+//       toast({ title: `Event ${isEdit ? "updated" : "created"} successfully` });
+//       setLocation(`/events/${savedEvent.id}`);
+      
+//     } catch (error) {
+//       toast({ 
+//         variant: "destructive", 
+//         title: "Action Failed", 
+//         description: error.message 
+//       });
+//     } finally {
+//       setIsSubmitting(false);
 //     }
 //   };
-
-//   const isSubmitting = createEvent.isPending || updateEvent.isPending;
 
 //   if (isEdit && isLoadingEvent) {
 //     return (
@@ -236,7 +222,8 @@
 //                           </FormControl>
 //                           <SelectContent>
 //                             {categories?.map((cat) => (
-//                               <SelectItem key={cat.id} value={cat.id.toString()}>
+//                               // We use cat.categoryId to align with your backend Event model
+//                               <SelectItem key={cat.id} value={cat.categoryId?.toString() || "0"}>
 //                                 {cat.name}
 //                               </SelectItem>
 //                             ))}
@@ -425,13 +412,12 @@
 //     </div>
 //   );
 // }
-
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -444,7 +430,7 @@ import { useToast } from "@/hooks/use-toast";
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
   description: z.string().optional(),
-  imageUrl: z.string().url("Must be a valid URL").or(z.literal("")).optional(),
+  imageFile: z.any().optional(), // Stores raw file object locally for upload
   location: z.string().min(3, "Location is required"),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().optional(),
@@ -458,7 +444,7 @@ const formSchema = z.object({
 export default function EventFormPage() {
   const { id } = useParams();
   const isEdit = !!id;
-  const eventId = isEdit ? id : undefined; // Backend uses MongoDB string ID
+  const eventId = isEdit ? id : undefined;
   
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -467,6 +453,7 @@ export default function EventFormPage() {
   const [eventData, setEventData] = useState(null);
   const [isLoadingEvent, setIsLoadingEvent] = useState(isEdit);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [imagePreview, setImagePreview] = useState("");
 
   const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
   const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
@@ -489,7 +476,10 @@ export default function EventFormPage() {
         if (!res.ok) throw new Error("Event not found");
         return res.json();
       })
-      .then((data) => setEventData(data))
+      .then((data) => {
+        setEventData(data);
+        if (data.imageUrl) setImagePreview(data.imageUrl); // Backend returning image string URL
+      })
       .catch((err) => {
         toast({ title: "Error", description: err.message, variant: "destructive" });
         setLocation("/events");
@@ -502,7 +492,7 @@ export default function EventFormPage() {
     defaultValues: {
       title: "",
       description: "",
-      imageUrl: "",
+      imageFile: null,
       location: "",
       startDate: new Date().toISOString().slice(0, 16),
       endDate: "",
@@ -522,7 +512,7 @@ export default function EventFormPage() {
       form.reset({
         title: eventData.title || "",
         description: eventData.description || "",
-        imageUrl: eventData.imageUrl || "",
+        imageFile: null,
         location: eventData.location || "",
         startDate: eventData.startDate ? new Date(eventData.startDate).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
         endDate: eventData.endDate ? new Date(eventData.endDate).toISOString().slice(0, 16) : "",
@@ -538,27 +528,37 @@ export default function EventFormPage() {
   const onSubmit = async (data) => {
     setIsSubmitting(true);
     
-    const formattedData = {
-      ...data,
-      startDate: new Date(data.startDate).toISOString(),
-      endDate: data.endDate ? new Date(data.endDate).toISOString() : undefined,
-      price: data.isFree ? undefined : data.price,
-    };
+    // Construct FormData object
+    const formData = new FormData();
+    formData.append("title", data.title);
+    formData.append("location", data.location);
+    formData.append("startDate", new Date(data.startDate).toISOString());
+    formData.append("categoryId", String(data.categoryId));
+    formData.append("isFree", String(data.isFree));
+    
+    if (data.description) formData.append("description", data.description);
+    if (data.endDate) formData.append("endDate", new Date(data.endDate).toISOString());
+    if (!data.isFree && data.price) formData.append("price", data.price);
+    if (data.url) formData.append("url", data.url);
+    if (data.organizerName) formData.append("organizerName", data.organizerName);
+    
+    // 🔥 MATCHES BACKEND: appends file matching upload.single('imageUrl')
+    if (data.imageFile) {
+      formData.append("imageUrl", data.imageFile);
+    }
 
     try {
       const endpoint = isEdit ? `${cleanBaseUrl}/api/events/${eventId}` : `${cleanBaseUrl}/api/events`;
       const method = isEdit ? "PATCH" : "POST";
-
-      // ⚠️ UPDATE THIS LINE: Grab your auth token from wherever you store it
       const token = localStorage.getItem("token") || ""; 
 
       const response = await fetch(endpoint, {
         method,
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` // Required by your backend req.user check
+          "Authorization": `Bearer ${token}`
+          // Keep Content-Type omitted so browser writes multi-part boundary stream headers correctly
         },
-        body: JSON.stringify(formattedData)
+        body: formData
       });
 
       if (!response.ok) {
@@ -569,7 +569,7 @@ export default function EventFormPage() {
       const savedEvent = await response.json();
       
       toast({ title: `Event ${isEdit ? "updated" : "created"} successfully` });
-      setLocation(`/events/${savedEvent.id}`);
+      setLocation(`/events/${savedEvent.id || savedEvent._id}`);
       
     } catch (error) {
       toast({ 
@@ -648,8 +648,7 @@ export default function EventFormPage() {
                           </FormControl>
                           <SelectContent>
                             {categories?.map((cat) => (
-                              // We use cat.categoryId to align with your backend Event model
-                              <SelectItem key={cat.id} value={cat.categoryId?.toString() || "0"}>
+                              <SelectItem key={cat.id || cat._id} value={cat.categoryId?.toString() || "0"}>
                                 {cat.name}
                               </SelectItem>
                             ))}
@@ -760,9 +759,7 @@ export default function EventFormPage() {
                       <FormItem className="flex flex-row items-center justify-between rounded-lg">
                         <div className="space-y-0.5">
                           <FormLabel className="text-base font-semibold">Free Event</FormLabel>
-                          <FormDescription>
-                            Is this event free to attend?
-                          </FormDescription>
+                          <FormDescription>Is this event free to attend?</FormDescription>
                         </div>
                         <FormControl>
                           <Switch
@@ -792,16 +789,49 @@ export default function EventFormPage() {
                   )}
                 </div>
 
+                {/* Cover Image Upload Area */}
                 <FormField
                   control={form.control}
-                  name="imageUrl"
-                  render={({ field }) => (
+                  name="imageFile"
+                  render={({ field: { ref, name, onBlur, onChange } }) => (
                     <FormItem>
-                      <FormLabel>Cover Image URL (Optional)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="https://example.com/image.jpg" {...field} />
-                      </FormControl>
-                      <FormDescription>Provide a high-quality image URL for your event banner.</FormDescription>
+                      <FormLabel>Cover Image</FormLabel>
+                      <div className="flex flex-col gap-4 items-start">
+                        {imagePreview && (
+                          <div className="relative w-full h-48 overflow-hidden rounded-lg border">
+                            <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                        <FormControl>
+                          <div className="flex items-center gap-2 w-full">
+                            <Input 
+                              type="file" 
+                              accept="image/*"
+                              className="hidden"
+                              id="event-image-upload"
+                              ref={ref}
+                              name={name}
+                              onBlur={onBlur}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  onChange(file); // Updates state inside react-hook-form
+                                  setImagePreview(URL.createObjectURL(file)); // Assigns browser local preview string URL
+                                }
+                              }}
+                            />
+                            <label 
+                              htmlFor="event-image-upload" 
+                              className="flex items-center justify-center border-2 border-dashed rounded-lg p-6 w-full cursor-pointer hover:bg-muted/50 transition"
+                            >
+                              <div className="flex flex-col items-center gap-1 text-sm text-muted-foreground">
+                                <Upload className="h-5 w-5 mb-1" />
+                                <span>Click to upload event graphic</span>
+                              </div>
+                            </label>
+                          </div>
+                        </FormControl>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}

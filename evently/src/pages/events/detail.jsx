@@ -1,3 +1,5 @@
+
+
 // import { useParams, Link, useLocation } from "wouter";
 // import { format } from "date-fns";
 // import { Calendar, MapPin, Clock, ExternalLink, ShieldCheck, Tag, Pencil, ArrowLeft } from "lucide-react";
@@ -8,87 +10,102 @@
 // import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 // import { Input } from "@/components/ui/input";
 // import { Label } from "@/components/ui/label";
-// import { useState } from "react";
+// import { useState, useEffect } from "react";
 // import { useToast } from "@/hooks/use-toast";
 
-// // --- CLIENT REPLACEMENT MOCK HOOKS ---
-// // Temporary Mock Data Store
-// const MOCK_EVENTS = {
-//   1: {
-//     id: 1,
-//     title: "Summer Music Festival 2026",
-//     description: "Join us for the biggest music event of the summer! Featuring international artists, amazing food trucks, and a vibrant community atmosphere. Fun for all ages.",
-//     imageUrl: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819",
-//     categoryName: "Music",
-//     isFree: false,
-//     price: "49.99",
-//     organizerName: "Acme Productions",
-//     startDate: new Date().toISOString(),
-//     endDate: new Date(Date.now() + 14400000).toISOString(), // +4 hours
-//     location: "Metropolis Arena Park",
-//     url: "https://example.com/summer-music-fest"
-//   }
+// // --- API CONFIGURATION ---
+// // Safely falls back to an empty string if the environment variable isn't found
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+
+// // --- DATA FETCHING HOOKS ---
+// const useGetEvent = (id) => {
+//   const [data, setData] = useState(null);
+//   const [isLoading, setIsLoading] = useState(true);
+//   const [error, setError] = useState(null);
+
+//   useEffect(() => {
+//     const fetchEvent = async () => {
+//       setIsLoading(true);
+//       setError(null);
+//       try {
+//         const response = await fetch(`${API_BASE_URL}/api/events/${id}`);
+//         if (!response.ok) {
+//           throw new Error(response.status === 404 ? "Event not found" : "Failed to fetch event details");
+//         }
+//         const jsonData = await response.json();
+//         setData(jsonData);
+//       } catch (err) {
+//         setError(err);
+//       } finally {
+//         setIsLoading(false);
+//       }
+//     };
+
+//     if (id) fetchEvent();
+//   }, [id]);
+
+//   return { data, isLoading, error };
 // };
 
-// const useGetEvent = (id, options) => {
-//   // Grab from store or generate fallback structure dynamically
-//   const event = MOCK_EVENTS[id] || {
-//     id: id,
-//     title: `Dynamic Event #${id}`,
-//     description: "This is a placeholder description generated on-the-fly for any unexpected URL ID parameter pathing.",
-//     imageUrl: "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4",
-//     categoryName: "Technology",
-//     isFree: true,
-//     organizerName: "Global Innovators",
-//     startDate: new Date().toISOString(),
-//     location: "Online / Virtual Conference",
-//   };
+// const useListRelatedEvents = (id) => {
+//   const [data, setData] = useState([]);
+//   const [isLoading, setIsLoading] = useState(true);
 
-//   return { data: event, isLoading: false, error: null };
-// };
+//   useEffect(() => {
+//     const fetchRelated = async () => {
+//       setIsLoading(true);
+//       try {
+//         const response = await fetch(`${API_BASE_URL}/api/events/${id}/related`);
+//         if (response.ok) {
+//           const jsonData = await response.json();
+//           setData(jsonData);
+//         }
+//       } catch (err) {
+//         console.error("Failed to fetch related events:", err);
+//       } finally {
+//         setIsLoading(false);
+//       }
+//     };
 
-// const useListRelatedEvents = (id, options) => {
-//   const list = [
-//     {
-//       id: 101,
-//       title: "Tech Summit 2026",
-//       description: "Exploring the next frontier of tech innovations.",
-//       imageUrl: "https://images.unsplash.com/photo-1540575467063-178a50c2df87",
-//       categoryName: "Technology",
-//       isFree: false,
-//       price: "19.99",
-//       startDate: new Date().toISOString(),
-//       location: "Silicon Convention Hall"
-//     },
-//     {
-//       id: 102,
-//       title: "Community Coding BootCamp",
-//       description: "Learn web frameworks completely from scratch.",
-//       imageUrl: "https://images.unsplash.com/photo-1515378791036-0648a3ef77b2",
-//       categoryName: "Technology",
-//       isFree: true,
-//       startDate: new Date().toISOString(),
-//       location: "Innovation Labs Hub"
-//     }
-//   ];
-//   return { data: list, isLoading: false };
+//     if (id) fetchRelated();
+//   }, [id]);
+
+//   return { data, isLoading };
 // };
 
 // const useCreateOrder = () => {
 //   const [isPending, setIsPending] = useState(false);
-//   const mutate = (payload, options) => {
+
+//   const mutate = async (payload, options) => {
 //     setIsPending(true);
-//     console.log("Mock Order Dispatched:", payload);
-    
-//     setTimeout(() => {
+//     try {
+//       // Assuming your orders endpoint is /api/orders
+//       const response = await fetch(`${API_BASE_URL}/api/orders`, {
+//         method: "POST",
+//         headers: {
+//           "Content-Type": "application/json",
+//           // Add 'Authorization': `Bearer ${token}` here if this endpoint is protected
+//         },
+//         body: JSON.stringify(payload.data),
+//       });
+
+//       if (!response.ok) {
+//         const errorData = await response.json().catch(() => ({}));
+//         throw new Error(errorData.error || "Transaction failed");
+//       }
+
 //       setIsPending(false);
 //       options?.onSuccess?.();
-//     }, 800);
+//     } catch (error) {
+//       setIsPending(false);
+//       options?.onError?.(error);
+//     }
 //   };
+
 //   return { mutate, isPending };
 // };
 
-// // Simplified EventCard mock component to avoid broken imports
+// // --- COMPONENTS ---
 // function EventCard({ event }) {
 //   return (
 //     <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow">
@@ -96,11 +113,13 @@
 //         {event.imageUrl && <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />}
 //       </div>
 //       <CardContent className="p-4">
-//         <Badge variant="secondary" className="mb-2">{event.categoryName}</Badge>
+//         {event.categoryName && (
+//           <Badge variant="secondary" className="mb-2">{event.categoryName}</Badge>
+//         )}
 //         <h4 className="font-bold line-clamp-1 text-base">{event.title}</h4>
 //         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{event.location}</p>
 //         <div className="mt-3 text-sm font-semibold text-primary">
-//           {event.isFree ? "Free" : `$${event.price}`}
+//           {event.isFree ? "Free" : event.price ? `$${event.price}` : "TBA"}
 //         </div>
 //       </CardContent>
 //     </Card>
@@ -110,11 +129,13 @@
 // // --- MAIN PAGE LAYOUT COMPONENT ---
 // export default function EventDetailPage() {
 //   const { id } = useParams();
-//   const eventId = Number(id) || 1; // Default to 1 if params missing
+//   const eventId = id || "1"; 
 //   const [, setLocation] = useLocation();
 //   const { toast } = useToast();
   
 //   const { data: event, isLoading: isLoadingEvent, error } = useGetEvent(eventId);
+//   console.log("Event Data from Backend:", event);
+//   console.log("Any Errors?:", error);
 //   const { data: relatedEvents } = useListRelatedEvents(eventId);
 //   const createOrder = useCreateOrder();
   
@@ -132,7 +153,7 @@
     
 //     createOrder.mutate({
 //       data: {
-//         eventId: event.id,
+//         eventId: event.id, // Formatted nicely from your backend's buildEventRow
 //         buyerName,
 //         buyerEmail,
 //         quantity,
@@ -145,16 +166,15 @@
 //           description: `You've successfully secured ${quantity} ticket(s) to ${event.title}.`,
 //         });
 //         setIsDialogOpen(false);
-//         // Clear transaction data inputs cleanly
 //         setBuyerName("");
 //         setBuyerEmail("");
 //         setQuantity(1);
 //       },
-//       onError: () => {
+//       onError: (error) => {
 //         toast({
 //           variant: "destructive",
 //           title: "Error",
-//           description: "Failed to purchase tickets. Please try again.",
+//           description: error.message || "Failed to purchase tickets. Please try again.",
 //         });
 //       }
 //     });
@@ -187,7 +207,8 @@
 //     );
 //   }
 
-//   const isPast = new Date(event.startDate) < new Date();
+//   // Determine if the event is already in the past
+//   const isPast = event.startDate ? new Date(event.startDate) < new Date() : false;
 
 //   return (
 //     <div className="bg-muted/10 min-h-full pb-20">
@@ -286,16 +307,18 @@
 //                 </div>
                 
 //                 <div className="space-y-4 mb-8">
-//                   <div className="flex gap-3">
-//                     <Calendar className="w-5 h-5 shrink-0 text-primary mt-0.5" />
-//                     <div>
-//                       <div className="font-semibold">{format(new Date(event.startDate), "EEEE, MMMM d, yyyy")}</div>
-//                       <div className="text-sm text-muted-foreground">
-//                         {format(new Date(event.startDate), "h:mm a")} 
-//                         {event.endDate && ` - ${format(new Date(event.endDate), "h:mm a")}`}
+//                   {event.startDate && (
+//                     <div className="flex gap-3">
+//                       <Calendar className="w-5 h-5 shrink-0 text-primary mt-0.5" />
+//                       <div>
+//                         <div className="font-semibold">{format(new Date(event.startDate), "EEEE, MMMM d, yyyy")}</div>
+//                         <div className="text-sm text-muted-foreground">
+//                           {format(new Date(event.startDate), "h:mm a")} 
+//                           {event.endDate && ` - ${format(new Date(event.endDate), "h:mm a")}`}
+//                         </div>
 //                       </div>
 //                     </div>
-//                   </div>
+//                   )}
                   
 //                   <div className="flex gap-3">
 //                     <MapPin className="w-5 h-5 shrink-0 text-primary mt-0.5" />
@@ -409,19 +432,18 @@
 
 import { useParams, Link, useLocation } from "wouter";
 import { format } from "date-fns";
-import { Calendar, MapPin, Clock, ExternalLink, ShieldCheck, Tag, Pencil, ArrowLeft } from "lucide-react";
+import { Calendar, MapPin, Clock, ExternalLink, ShieldCheck, Tag, Pencil, ArrowLeft, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 // --- API CONFIGURATION ---
-// Safely falls back to an empty string if the environment variable isn't found
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 // --- DATA FETCHING HOOKS ---
@@ -486,12 +508,10 @@ const useCreateOrder = () => {
   const mutate = async (payload, options) => {
     setIsPending(true);
     try {
-      // Assuming your orders endpoint is /api/orders
       const response = await fetch(`${API_BASE_URL}/api/orders`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // Add 'Authorization': `Bearer ${token}` here if this endpoint is protected
         },
         body: JSON.stringify(payload.data),
       });
@@ -512,6 +532,40 @@ const useCreateOrder = () => {
   return { mutate, isPending };
 };
 
+// --- NEW DELETE HOOK ---
+const useDeleteEvent = () => {
+  const [isPending, setIsPending] = useState(false);
+
+  const mutate = async (id, options) => {
+    setIsPending(true);
+    try {
+      // Grab your auth token (replace this with your actual token retrieval logic)
+      const token = localStorage.getItem("token") || sessionStorage.getItem("token"); 
+
+      const response = await fetch(`${API_BASE_URL}/api/events/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          // Pass the Bearer token to authorize the request
+          ...(token && { "Authorization": `Bearer ${token}` }),
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to delete event");
+      }
+
+      setIsPending(false);
+      options?.onSuccess?.();
+    } catch (error) {
+      setIsPending(false);
+      options?.onError?.(error);
+    }
+  };
+
+  return { mutate, isPending };
+};
 // --- COMPONENTS ---
 function EventCard({ event }) {
   return (
@@ -541,15 +595,15 @@ export default function EventDetailPage() {
   const { toast } = useToast();
   
   const { data: event, isLoading: isLoadingEvent, error } = useGetEvent(eventId);
-  console.log("Event Data from Backend:", event);
-  console.log("Any Errors?:", error);
   const { data: relatedEvents } = useListRelatedEvents(eventId);
   const createOrder = useCreateOrder();
+  const deleteEventHook = useDeleteEvent();
   
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   const handlePurchase = (e) => {
     e.preventDefault();
@@ -560,7 +614,7 @@ export default function EventDetailPage() {
     
     createOrder.mutate({
       data: {
-        eventId: event.id, // Formatted nicely from your backend's buildEventRow
+        eventId: event.id,
         buyerName,
         buyerEmail,
         quantity,
@@ -582,6 +636,28 @@ export default function EventDetailPage() {
           variant: "destructive",
           title: "Error",
           description: error.message || "Failed to purchase tickets. Please try again.",
+        });
+      }
+    });
+  };
+
+  const handleDeleteEvent = () => {
+    if (!event) return;
+    
+    deleteEventHook.mutate(event.id, {
+      onSuccess: () => {
+        toast({
+          title: "Event Deleted",
+          description: "The event was successfully removed.",
+        });
+        setIsDeleteOpen(false);
+        setLocation("/events"); // Redirect safely to home/list route
+      },
+      onError: (err) => {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: err.message || "Could not complete deletion. Make sure you are authorized.",
         });
       }
     });
@@ -614,7 +690,6 @@ export default function EventDetailPage() {
     );
   }
 
-  // Determine if the event is already in the past
   const isPast = event.startDate ? new Date(event.startDate) < new Date() : false;
 
   return (
@@ -815,6 +890,34 @@ export default function EventDetailPage() {
                       Edit Event
                     </Button>
                   </Link>
+
+                  {/* --- DROP-IN DELETE EVENT BUTTON & DIALOG --- */}
+                  <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="destructive" className="w-full" data-testid="button-delete-event">
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete Event
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[425px]">
+                      <DialogHeader>
+                        <DialogTitle className="text-destructive flex items-center gap-2">
+                          <Trash2 className="w-5 h-5" /> Delete Event
+                        </DialogTitle>
+                        <DialogDescription className="pt-2">
+                          Are you absolutely sure you want to delete <strong>{event.title}</strong>? This action cannot be undone and will permanently erase this event record.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter className="gap-2 sm:gap-0 pt-4 border-t">
+                        <Button variant="outline" onClick={() => setIsDeleteOpen(false)} disabled={deleteEventHook.isPending}>
+                          Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={handleDeleteEvent} disabled={deleteEventHook.isPending}>
+                          {deleteEventHook.isPending ? "Deleting..." : "Confirm Delete"}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </CardContent>
             </Card>
