@@ -1,4 +1,5 @@
 
+
 import Event from '../models/events.js';
 import Order from '../models/Order.js'; 
 import Category from '../models/Category.js'; 
@@ -44,11 +45,19 @@ export const getEvents = async (req, res) => {
   try {
     const { redis } = req;
     const { search = '', categoryId = '', limit = 20, offset = 0 } = req.query;
-
+    console.log("=== DEBUG GET EVENTS ===");
+    console.log("Raw URL Query params:", req.query);
+    console.log("Extracted categoryId:", categoryId);
     // Generate a unique cache key based on query filters to avoid data leakage across requests
     const cacheKey = `cache:events:all:s_${search}:c_${categoryId}:l_${limit}:o_${offset}`;
     
-    const cachedData = await redis.get(cacheKey);
+    let cachedData = null;
+    try {
+      cachedData = await redis.get(cacheKey);
+    } catch (redisErr) {
+      console.error('Redis GET failed (falling back to DB):', redisErr.message);
+    }
+
     if (cachedData) {
       console.log('Serving paginated events from Upstash Redis');
       return res.json(JSON.parse(cachedData));
@@ -64,7 +73,22 @@ export const getEvents = async (req, res) => {
     }
 
     if (categoryId) {
-      queryFilter.categoryId = Number(categoryId);
+      // If it's a number string (e.g. "1"), convert it directly
+      if (!isNaN(categoryId)) {
+        queryFilter.categoryId = Number(categoryId);
+      } else {
+        // If it's text (e.g. "music"), find the Category document via a case-insensitive regex match
+        const categoryDoc = await Category.findOne({ 
+          name: { $regex: new RegExp(`^${categoryId}$`, 'i') } 
+        }).lean();
+        
+        if (categoryDoc) {
+          queryFilter.categoryId = categoryDoc.categoryId;
+        } else {
+          // If the text category doesn't exist at all, force the query to return zero matches safely
+          queryFilter.categoryId = -1; 
+        }
+      }
     }
 
     console.time("eventsQuery");
@@ -86,7 +110,11 @@ export const getEvents = async (req, res) => {
     const responsePayload = { events: formattedEvents, total };
 
     // Cache the query structure for 5 minutes (300s) to keep high-speed pagination snappy
-    await redis.set(cacheKey, JSON.stringify(responsePayload), 'EX', 300);
+    try {
+      await redis.set(cacheKey, JSON.stringify(responsePayload), 'EX', 300);
+    } catch (redisErr) {
+      console.error('Redis SET failed:', redisErr.message);
+    }
 
     return res.json(responsePayload);
   } catch (error) {
@@ -116,6 +144,7 @@ export const createEvent = async (req, res) => {
     const categoryDoc = await Category.findOne({ categoryId: event.categoryId }).lean();
 
     // Invalidate caches to show the new event on dashboards instantly
+    // (clearEventsCache handles its own Redis errors)
     await clearEventsCache(redis);
 
     return res.status(201).json(buildEventRow(event.toObject(), categoryDoc ? categoryDoc.name : null, 0));
@@ -131,7 +160,13 @@ export const getTrendingEvents = async (req, res) => {
     const { redis } = req;
     const cacheKey = 'cache:events:trending';
 
-    const cachedTrending = await redis.get(cacheKey);
+    let cachedTrending = null;
+    try {
+      cachedTrending = await redis.get(cacheKey);
+    } catch (redisErr) {
+      console.error('Redis GET failed (falling back to DB):', redisErr.message);
+    }
+    
     if (cachedTrending) {
       console.log('Serving trending events from Upstash Redis');
       return res.json(JSON.parse(cachedTrending));
@@ -153,7 +188,12 @@ export const getTrendingEvents = async (req, res) => {
         })
       );
 
-      await redis.set(cacheKey, JSON.stringify(formattedRecent), 'EX', 600); // Cache for 10 mins
+      try {
+        await redis.set(cacheKey, JSON.stringify(formattedRecent), 'EX', 600); // Cache for 10 mins
+      } catch (redisErr) {
+        console.error('Redis SET failed:', redisErr.message);
+      }
+      
       return res.json(formattedRecent);
     }
 
@@ -167,7 +207,12 @@ export const getTrendingEvents = async (req, res) => {
     );
 
     const result = trendingEvents.filter(e => e !== null);
-    await redis.set(cacheKey, JSON.stringify(result), 'EX', 600);
+    
+    try {
+      await redis.set(cacheKey, JSON.stringify(result), 'EX', 600);
+    } catch (redisErr) {
+      console.error('Redis SET failed:', redisErr.message);
+    }
 
     return res.json(result);
   } catch (error) {
@@ -182,7 +227,13 @@ export const getEventById = async (req, res) => {
     const { redis } = req;
     const cacheKey = `cache:events:single:${req.params.id}`;
 
-    const cachedEvent = await redis.get(cacheKey);
+    let cachedEvent = null;
+    try {
+      cachedEvent = await redis.get(cacheKey);
+    } catch (redisErr) {
+      console.error('Redis GET failed (falling back to DB):', redisErr.message);
+    }
+
     if (cachedEvent) {
       console.log(`Serving event details for ID ${req.params.id} from Upstash Redis`);
       return res.json(JSON.parse(cachedEvent));
@@ -199,7 +250,11 @@ export const getEventById = async (req, res) => {
 
     const formattedEvent = buildEventRow(row, categoryDoc ? categoryDoc.name : null, totalTickets);
     
-    await redis.set(cacheKey, JSON.stringify(formattedEvent), 'EX', 1800); // Cache individual event for 30 mins
+    try {
+      await redis.set(cacheKey, JSON.stringify(formattedEvent), 'EX', 1800); // Cache individual event for 30 mins
+    } catch (redisErr) {
+      console.error('Redis SET failed:', redisErr.message);
+    }
 
     return res.json(formattedEvent);
   } catch (error) {
@@ -247,7 +302,12 @@ export const updateEvent = async (req, res) => {
 
     // Evict list aggregations and specific details cache to flush out stale values
     await clearEventsCache(redis);
-    await redis.del(`cache:events:single:${req.params.id}`);
+    
+    try {
+      await redis.del(`cache:events:single:${req.params.id}`);
+    } catch (redisErr) {
+      console.error('Redis DEL failed:', redisErr.message);
+    }
 
     return res.json(updatedFormattedEvent);
   } catch (error) {
@@ -274,7 +334,12 @@ export const deleteEvent = async (req, res) => {
 
     // Evict all dependent caches
     await clearEventsCache(redis);
-    await redis.del(`cache:events:single:${req.params.id}`);
+    
+    try {
+      await redis.del(`cache:events:single:${req.params.id}`);
+    } catch (redisErr) {
+      console.error('Redis DEL failed:', redisErr.message);
+    }
 
     return res.sendStatus(204); 
   } catch (error) {
@@ -289,7 +354,13 @@ export const getRelatedEvents = async (req, res) => {
     const { redis } = req;
     const cacheKey = `cache:events:related:${req.params.id}`;
 
-    const cachedRelated = await redis.get(cacheKey);
+    let cachedRelated = null;
+    try {
+      cachedRelated = await redis.get(cacheKey);
+    } catch (redisErr) {
+      console.error('Redis GET failed (falling back to DB):', redisErr.message);
+    }
+
     if (cachedRelated) {
       console.log(`Serving related events for ID ${req.params.id} from Upstash Redis`);
       return res.json(JSON.parse(cachedRelated));
@@ -312,7 +383,11 @@ export const getRelatedEvents = async (req, res) => {
       })
     );
 
-    await redis.set(cacheKey, JSON.stringify(formattedRelated), 'EX', 1800);
+    try {
+      await redis.set(cacheKey, JSON.stringify(formattedRelated), 'EX', 1800);
+    } catch (redisErr) {
+      console.error('Redis SET failed:', redisErr.message);
+    }
 
     return res.json(formattedRelated);
   } catch (error) {
