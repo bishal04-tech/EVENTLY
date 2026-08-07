@@ -51,6 +51,37 @@ export const getDashboardStats = async (req, res) => {
 
 // @desc    Get event counts categorized, sorted from highest to lowest activity
 // @route   GET /api/stats/categories
+// export const getCategoryStats = async (req, res) => {
+//   try {
+//     // Replicates the LEFT JOIN + GROUP BY + ORDER BY SQL block using MongoDB's aggregation pipeline
+//     const categoryStats = await Category.aggregate([
+//       {
+//         $lookup: {
+//           from: 'events',            // Must match your exact MongoDB collection name for Events
+//           localField: '',         // Using MongoDB's standard hex _id field
+//           foreignField: 'categoryId', 
+//           as: 'matchedEvents'
+//         }
+//       },
+//       {
+//         $project: {
+//           _id: 0,                    // Suppresses the default wrapper root ID
+//           categoryId: '$_id',        // Remaps the hex ID field to 'categoryId' for frontend expectation
+//           categoryName: '$name',
+//           eventCount: { $size: '$matchedEvents' } // Counts array elements generated from the lookup
+//         }
+//       },
+//       {
+//         $sort: { eventCount: -1 }    // Sorts descending (highest count first)
+//       }
+//     ]);
+
+//     res.json(categoryStats);
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// };
+
 export const getCategoryStats = async (req, res) => {
   try {
     // Replicates the LEFT JOIN + GROUP BY + ORDER BY SQL block using MongoDB's aggregation pipeline
@@ -58,15 +89,15 @@ export const getCategoryStats = async (req, res) => {
       {
         $lookup: {
           from: 'events',            // Must match your exact MongoDB collection name for Events
-          localField: '_id',         // Using MongoDB's standard hex _id field
-          foreignField: 'categoryId', 
+          localField: 'categoryId',  // CHANGED: was '_id' — Event.categoryId is a Number, not an ObjectId
+          foreignField: 'categoryId',
           as: 'matchedEvents'
         }
       },
       {
         $project: {
           _id: 0,                    // Suppresses the default wrapper root ID
-          categoryId: '$_id',        // Remaps the hex ID field to 'categoryId' for frontend expectation
+          categoryId: '$categoryId', // CHANGED: was '$_id' — return the actual Number categoryId, not the hex _id
           categoryName: '$name',
           eventCount: { $size: '$matchedEvents' } // Counts array elements generated from the lookup
         }

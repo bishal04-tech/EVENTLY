@@ -465,11 +465,11 @@ export default function HomePage() {
               Array(5).fill(0).map((_, i) => <Skeleton key={i} className="h-10 w-24 rounded-full" />)
             ) : categories?.map((cat) => (
               <Button
-                key={cat.id}
-                variant={activeCategory === cat.id ? "default" : "outline"}
+                key={cat.categoryId}
+                variant={activeCategory === cat.categoryId? "default" : "outline"}
                 className="rounded-full"
-                onClick={() => setActiveCategory(cat.id)}
-                data-testid={`button-category-${cat.id}`}
+                onClick={() => setActiveCategory(cat.categoryId)}
+                data-testid={`button-category-${cat.categoryId}`}
               >
                 {cat.name}
               </Button>
