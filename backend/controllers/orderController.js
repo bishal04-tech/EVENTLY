@@ -1,5 +1,4 @@
-
-
+import mongoose from 'mongoose';
 import Order from '../models/Order.js';
 import Event from '../models/events.js';
 
@@ -70,14 +69,14 @@ export const getOrders = async (req, res) => {
     // Handle cross-entity search requirements dynamically using MongoDB regex
     if (search) {
       const matchedEvents = await Event.find({
-        title: { $regex: search, $options: 'i' }
+        title: { $regex: search,$options: 'i' }
       }).select('_id').lean();
       
       const matchedEventIds = matchedEvents.map(e => e._id);
 
       queryFilter.$or = [
-        { buyerName: { $regex: search, $options: 'i' } },
-        { buyerEmail: { $regex: search, $options: 'i' } },
+        { buyerName: { $regex: search,$options: 'i' } },
+        { buyerEmail: { $regex: search,$options: 'i' } },
         { eventId: { $in: matchedEventIds } }
       ];
     }
@@ -108,38 +107,150 @@ export const getOrders = async (req, res) => {
   }
 };
 
-// @desc    Register / Purchase tickets for an event
+// @desc    Register / Purchase tickets for an event with atomic concurrency protection
+// @route   POST /api/orders
+// export const createOrder = async (req, res) => {
+//   const { redis } = req;
+//   const { eventId, buyerName, buyerEmail, quantity, totalAmount } = req.body;
+
+//   if (!eventId || !buyerName || !buyerEmail) {
+//     return res.status(400).json({ error: 'Please provide eventId, buyerName, and buyerEmail parameters' });
+//   }
+
+//   const requestedQty = Number(quantity || 1);
+//   if (requestedQty <= 0) {
+//     return res.status(400).json({ error: 'Quantity must be at least 1' });
+//   }
+
+//   // Start a Mongoose session for atomicity across documents
+//   const session = await mongoose.startSession();
+
+//   try {
+//     session.startTransaction();
+
+//     // ATOMIC CHECK AND DECREMENT:
+//     // MongoDB locks this event document for the duration of this write.
+//     // If availableSeats < requestedQty, it fails to match and returns null.
+//     const updatedEvent = await Event.findOneAndUpdate(
+//       {
+//         _id: eventId,
+//         availableSeats: { $gte: requestedQty } // Condition: enough seats must remain
+//       },
+//       {
+//         $inc: { availableSeats: -requestedQty } // Atomically decrement available seats
+//       },
+//       { new: true, session }
+//     );
+
+//     // If updatedEvent is null, either the event doesn't exist or it's sold out
+//     if (!updatedEvent) {
+//       await session.abortTransaction();
+//       const eventExists = await Event.exists({ _id: eventId });
+//       if (!eventExists) {
+//         return res.status(404).json({ error: 'The targeted event does not exist' });
+//       }
+//       return res.status(409).json({ 
+//         error: 'Sold out! Not enough available seats remaining for this event.' 
+//       });
+//     }
+
+//     // Create the order record inside the same atomic session
+//     const [order] = await Order.create(
+//       [
+//         {
+//           eventId,
+//           buyerName,
+//           buyerEmail,
+//           quantity: requestedQty,
+//           totalAmount: String(totalAmount || '0')
+//         }
+//       ],
+//       { session }
+//     );
+
+//     await session.commitTransaction();
+
+//     // Cascade clear the caches since sales calculations and seat counts have updated
+//     await clearOrdersCache(redis, eventId);
+
+//     return res.status(201).json(buildOrderRow(order.toObject(), updatedEvent.title));
+//   } catch (error) {
+//     await session.abortTransaction();
+//     return res.status(400).json({ error: error.message });
+//   } finally {
+//     session.endSession();
+//   }
+// };
+// @desc    Register / Purchase tickets for an event with atomic concurrency protection
 // @route   POST /api/orders
 export const createOrder = async (req, res) => {
+  const { redis } = req;
+  const { eventId, buyerName, buyerEmail, quantity, totalAmount } = req.body;
+
+  if (!eventId || !buyerName || !buyerEmail) {
+    return res.status(400).json({ error: 'Please provide eventId, buyerName, and buyerEmail parameters' });
+  }
+
+ // Fix: Check undefined explicitly so '0' doesn't falsely fall back to '1'
+  const requestedQty = quantity !== undefined ? Number(quantity) : 1;
+  if (isNaN(requestedQty) || requestedQty <= 0) {
+    return res.status(400).json({ error: 'Quantity must be at least 1' });
+  }
   try {
-    const { redis } = req;
-    const { eventId, buyerName, buyerEmail, quantity, totalAmount } = req.body;
+    // 1. ATOMIC CHECK AND DECREMENT (No Session)
+    // Natively queues in MongoDB without throwing WriteConflicts under extreme concurrency.
+    const updatedEvent = await Event.findOneAndUpdate(
+      {
+        _id: eventId,
+        availableSeats: { $gte: requestedQty } // Condition: enough seats must remain
+      },
+      {
+        $inc: { availableSeats: -requestedQty } // Atomically decrement available seats
+      },
+      { new: true }
+    );
 
-    if (!eventId || !buyerName || !buyerEmail) {
-      return res.status(400).json({ error: 'Please provide eventId, buyerName, and buyerEmail parameters' });
+    // If updatedEvent is null, either the event doesn't exist or it's sold out
+    if (!updatedEvent) {
+      const eventExists = await Event.exists({ _id: eventId });
+      if (!eventExists) {
+        return res.status(404).json({ error: 'The targeted event does not exist' });
+      }
+      return res.status(409).json({ 
+        error: 'Sold out! Not enough available seats remaining for this event.' 
+      });
     }
 
-    const event = await Event.findById(eventId).select('title').lean();
-    if (!event) {
-      return res.status(404).json({ error: 'The targeted event does not exist' });
+    // 2. CREATE THE ORDER
+    try {
+      const order = await Order.create({
+        eventId,
+        buyerName,
+        buyerEmail,
+        quantity: requestedQty,
+        totalAmount: String(totalAmount || '0')
+      });
+
+      // Cascade clear the caches since sales calculations and seat counts have updated
+      await clearOrdersCache(redis, eventId);
+
+      return res.status(201).json(buildOrderRow(order.toObject(), updatedEvent.title));
+      
+    } catch (orderError) {
+      // 3. COMPENSATING TRANSACTION (Manual Rollback)
+      // If the Order fails to save to the DB, refund the seats back to the Event
+      await Event.updateOne(
+        { _id: eventId },
+        { $inc: { availableSeats: requestedQty } }
+      );
+      throw orderError; // Pass to outer catch block
     }
 
-    const order = await Order.create({
-      eventId,
-      buyerName,
-      buyerEmail,
-      quantity: Number(quantity || 1),
-      totalAmount: String(totalAmount || '0')
-    });
-
-    // Cascade clear the caches since sales calculations across the server have updated
-    await clearOrdersCache(redis, eventId);
-
-    return res.status(201).json(buildOrderRow(order.toObject(), event.title));
   } catch (error) {
     return res.status(400).json({ error: error.message });
   }
 };
+
 
 // @desc    Get a single order record by ID
 // @route   GET /api/orders/:id

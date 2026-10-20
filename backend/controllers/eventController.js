@@ -1,11 +1,16 @@
-
-
 import Event from '../models/events.js';
 import Order from '../models/Order.js'; 
 import Category from '../models/Category.js'; 
 
 // Helper to format rows cleanly matching your original UI expectations
 function buildEventRow(event, categoryName = null, ticketsSold = 0) {
+  const sold = ticketsSold || 0;
+  const totalSeats = event.totalSeats !== undefined ? Number(event.totalSeats) : 50;
+  const availableSeats =
+    event.availableSeats !== undefined
+      ? Number(event.availableSeats)
+      : Math.max(0, totalSeats - sold);
+
   return {
     id: event._id, 
     title: event.title,
@@ -21,7 +26,10 @@ function buildEventRow(event, categoryName = null, ticketsSold = 0) {
     organizerName: event.organizerName || null,
     createdAt: event.createdAt ? new Date(event.createdAt).toISOString() : null,
     categoryName: categoryName || null,
-    ticketsSold: ticketsSold || 0,
+    ticketsSold: sold,
+    totalSeats,
+    availableSeats,
+    isSoldOut: availableSeats <= 0,
   };
 }
 
@@ -66,9 +74,9 @@ export const getEvents = async (req, res) => {
     let queryFilter = {};
     if (search) {
       queryFilter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { location: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
+        { title: { $regex: search,$options: 'i' } },
+        { location: { $regex: search,$options: 'i' } },
+        { description: { $regex: search,$options: 'i' } },
       ];
     }
 
@@ -128,14 +136,19 @@ export const getEvents = async (req, res) => {
 export const createEvent = async (req, res) => {
   try {
     const { redis } = req;
-    const { startDate, endDate, ...rest } = req.body;
+    const { startDate, endDate, totalSeats, ...rest } = req.body;
 
     // Direct drop-in: Check if Multer intercepted an uploaded file and assigned a Cloudinary link
     const imageUrl = req.file ? req.file.path : (rest.imageUrl || '');
 
+    // Parse totalSeats from multipart/form-data or JSON body (defaults to 50 if omitted)
+    const parsedTotalSeats = totalSeats !== undefined && totalSeats !== '' ? Number(totalSeats) : 50;
+
     const event = await Event.create({
       ...rest,
       imageUrl, // Plug the Cloudinary link straight into your pristine model format
+      totalSeats: parsedTotalSeats,
+      availableSeats: parsedTotalSeats, // Starts equal to totalSeats
       startDate: new Date(startDate),
       endDate: endDate ? new Date(endDate) : null,
       user: req.user.id 
@@ -174,8 +187,7 @@ export const getTrendingEvents = async (req, res) => {
 
     const topOrders = await Order.aggregate([
       { $group: { _id: "$eventId", ticketsSold: { $sum: "$quantity" } } },
-      { $sort: { ticketsSold: -1 } },
-      { $limit: 6 }
+      { $sort: { ticketsSold: -1 } }, {$limit: 6 }
     ]);
 
     if (topOrders.length === 0) {
@@ -268,7 +280,7 @@ export const getEventById = async (req, res) => {
 export const updateEvent = async (req, res) => {
   try {
     const { redis } = req;
-    const { startDate, endDate, ...rest } = req.body;
+    const { startDate, endDate, totalSeats, ...rest } = req.body;
     
     const existingEvent = await Event.findById(req.params.id);
     if (!existingEvent) {
@@ -279,9 +291,24 @@ export const updateEvent = async (req, res) => {
       return res.status(403).json({ error: "User not authorized to update this event" });
     }
 
+    const orders = await Order.find({ eventId: existingEvent._id }).lean();
+    const totalTickets = orders.reduce((sum, order) => sum + (order.quantity || 0), 0);
+
     const updateData = { ...rest };
     if (startDate) updateData.startDate = new Date(startDate);
     if (endDate) updateData.endDate = new Date(endDate);
+
+    // Recalculate availableSeats safely if the organizer updates totalSeats
+    if (totalSeats !== undefined && totalSeats !== '') {
+      const parsedTotalSeats = Number(totalSeats);
+      if (parsedTotalSeats < totalTickets) {
+        return res.status(400).json({
+          error: `Cannot reduce total seats (${parsedTotalSeats}) below tickets already sold (${totalTickets})`
+        });
+      }
+      updateData.totalSeats = parsedTotalSeats;
+      updateData.availableSeats = parsedTotalSeats - totalTickets;
+    }
     
     // Direct drop-in: Update imageUrl configuration only if a new file path is coming through Multer
     if (req.file) {
@@ -295,8 +322,6 @@ export const updateEvent = async (req, res) => {
     ).lean();
 
     const categoryDoc = await Category.findOne({ categoryId: event.categoryId }).lean();
-    const orders = await Order.find({ eventId: event._id }).lean();
-    const totalTickets = orders.reduce((sum, order) => sum + (order.quantity || 0), 0);
 
     const updatedFormattedEvent = buildEventRow(event, categoryDoc ? categoryDoc.name : null, totalTickets);
 
@@ -379,7 +404,9 @@ export const getRelatedEvents = async (req, res) => {
     const formattedRelated = await Promise.all(
       related.map(async (e) => {
         const categoryDoc = await Category.findOne({ categoryId: e.categoryId }).lean();
-        return buildEventRow(e, categoryDoc ? categoryDoc.name : null, 0);
+        const orders = await Order.find({ eventId: e._id }).lean();
+        const totalTickets = orders.reduce((sum, order) => sum + (order.quantity || 0), 0);
+        return buildEventRow(e, categoryDoc ? categoryDoc.name : null, totalTickets);
       })
     );
 

@@ -47,11 +47,26 @@ const eventSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    totalSeats: {
+      type: Number,
+      required: [true, 'Total seats capacity is required'],
+      min: [1, 'Total seats must be at least 1'],
+      default: 50,
+    },
+    availableSeats: {
+      type: Number,
+      required: true,
+      min: [0, 'Available seats cannot be negative'],
+      default: function () {
+        // Automatically sets availableSeats equal to totalSeats when a new event is created
+        return this.totalSeats;
+      },
+    },
     user: {
-    type: mongoose.Schema.Types.ObjectId, // Stores MongoDB's unique document ID hash
-    ref: 'User',                           // Connects this field directly to your 'User' collection
-    required: [true, 'An event must belong to a registered creator']
-    }
+      type: mongoose.Schema.Types.ObjectId, // Stores MongoDB's unique document ID hash
+      ref: 'User',                          // Connects this field directly to your 'User' collection
+      required: [true, 'An event must belong to a registered creator'],
+    },
   },
   {
     timestamps: true, // This automatically manages 'createdAt' and 'updatedAt' fields for you!
